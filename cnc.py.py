@@ -1252,7 +1252,7 @@ if result == 'Tool Wear Detection':
     from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
     import warnings
     warnings.filterwarnings("ignore", category=FutureWarning)
-    
+
     frames = list()
     results = pd.read_csv(uploaded_file) 
     for i in range(1,19):
@@ -1261,7 +1261,6 @@ if result == 'Tool Wear Detection':
             bytes_data = multiple_file.read()
             print("filename:", multiple_file.name)
             print(bytes_data)
-        frames=list()
         frame = pd.read_csv(multiple_file.name)
         row = results[results['No'] == i]
         frame['target'] = 1 if row.iloc[0]['tool_condition'] == 'worn' else 0
@@ -1275,6 +1274,7 @@ if result == 'Tool Wear Detection':
     plt.figure(figsize=(20,20))
     sns.heatmap(df_correlation)
     st.pyplot(plt)
+
     from sklearn.model_selection import train_test_split
     from sklearn.model_selection import KFold
     from sklearn.model_selection import GridSearchCV
@@ -1296,32 +1296,35 @@ if result == 'Tool Wear Detection':
     x=df.drop(columns=['target','Machining_Process'],axis=1)
     y=np.array(df['target'])
     X_train,X_test,y_train,y_test =train_test_split(x,y,train_size=0.8,random_state=100)
-    
+
+  
     #XgBoost
 
     xgb_model=XGBClassifier()
     xgb_model.fit(X_train,y_train)
+
 
     # make predictions for test data
     # use predict_proba since we need probabilities to compute auc
     y_pred = xgb_model.predict(X_test)
     y_pred[:10]
 
-    st.write('-------------------------------------------------------------------------------------------------')
+
     st.write("Trained on {0} observations and scoring with {1} test samples.".format(len(X_train), len(X_test)))
-    st.write('-------------------------------------------------------------------------------------------------')
+
+    st.write('AUC SCORE')
     # roc_auc
-    st.write('-------------------------------------------------------------------------------------------------')
-    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-    st.write("auc_score")
-    y_pred=y_pred.round()
+    #y_pred=y_pred.round()
     auc = roc_auc_score(y_test, y_pred)
     auc
-    st.write('-------------------------------------------------------------------------------------------------')
+
+
     from sklearn.metrics import confusion_matrix
     cnf_matrix = confusion_matrix(y_test, y_pred)
     cnf_matrix
 
+
+    st.write('roc_auc score')
     from sklearn.metrics import roc_curve, auc
     fpr, tpr, thresholds = roc_curve(y_test, y_pred)
     roc_auc = auc(fpr, tpr)
@@ -1341,14 +1344,17 @@ if result == 'Tool Wear Detection':
         plt.ylabel('True Positive Rate')
         plt.title('Receiver operating characteristic example')
         plt.legend(loc="lower right")
-        plt.show()
+        st.pyplot(plt)
 
         return fpr, tpr, thresholds
 
+        plt.figure(figsize=(20,20))
+        draw_roc(y_test,y_pred)
+        st.pyplot(plt)
 
-    draw_roc(y_test,y_pred)
 
 
+        
     # Error terms
     #Actual vs Predicted
     #c = [i for i in range(1,(len(y_test)+1),1)]
@@ -1359,16 +1365,63 @@ if result == 'Tool Wear Detection':
     plt.plot(c,y_pred[:count_points], color="red",  linewidth=2.5, linestyle="--")#predicted Plot in red
     fig.suptitle('Actual and Predicted', fontsize=20)              # Plot heading 
     plt.xlabel('Index', fontsize=18)                               # X-label
-    plt.ylabel('Worn_status', fontsize=16)    
-    st.pyplot(fig) 
+    plt.ylabel('Worn_status', fontsize=16)     
+    st.pyplot(fig)
 
-
-    
-    st.write('-------------------------------------------------------------------------------------------------')
-
-    st.subheader("Feature importances:-")
+    st.write('FEATURE IMPORTANCE')
     features = [(df.columns[i], v) for i,v in enumerate(xgb_model.feature_importances_)]
     features.sort(key=lambda x: x[1], reverse = True)
     for item in features[:10]:
         st.write("{0}: {1:0.4f}".format(item[0], item[1]))
-    st.write('-------------------------------------------------------------------------------------------------')
+
+
+if result == 'Tips':
+    st.subheader('Tips')
+    st.markdown('''
+    # Increase Tool Life, Reduce Tool Wear :-
+    #### This guide will show you 11 ways to radically increase your tool life and reduce tool wear. Plus it will explain the details and mechanisms of tool wear, discuss how to calculate tool wear, and describe tool life monitoring.
+    #### customer wanting to know how to maximize his tool life and reduce tool wear.  He’s doing long production runs and wants to keep the spindles turning as much as possible.  It was a good reminder that this is a topic on a lot of machinist’s minds so here are 11 tips to increase your tool life with lots of links to even more in-depth information in each area:
+
+    ## 1.Use the Right Feeds and Speeds:
+    #### You can go by how the cut sounds.
+    #### You can’t possibly go wrong by just slowing things way down.
+    #### You can just read the best feeds and speeds out of a handbook or tooling catalog.
+    #### CNC feeds and speeds are just like manual feeds and speeds.
+
+    ## 2.Keep Deflection Under Control :
+    #### Deflection kills endmills, sometimes in surprising ways, and especially carbide endmills since they’re brittle and don’t bend as easily as HSS endmills.  Most machinists are unaware how much deflection they’re running until it gets too far out of hand.
+    #### But, a good Feeds and Speeds Calculator will tell you how much deflection your cut parameters will generate.  A great one will help you optimize your cut parameters within deflection limits.  Also, when you’re setting up tools for use in many jobs, use as little Tool Stickout as possible.
+
+    ## 3.Avoid Recutting Chips :
+    #### Make sure the coolant is set up to get rid of them.  Sometimes flood coolant turns into “dribble” coolant because machines lack full enclosures and the machinist wants to avoid a mess.  Use mist for those machines as the dribble just covers up the chips sitting in the cut so you can no longer see them.
+
+    ## 4.Lubricate Sticky Materials:
+    #### Built up edge or “BUE” is the technical term.  Some materials have an affinity for what cutters are made of and they will weld chips onto the cutting edge which quickly results in a broken cutter.  Aluminum is one such, but there are a lot of others.  Look up the material and if it is prone to chip welding, you need lubrication.  You can get it from flood coolant, mist coolant, or some tool coatings.  What you can do is machine materials prone to chip welding with lubrication.
+
+    ## 5.Add a Surface Speed Safety Factor:
+    #### Given a choice between reducing surface speed (SFM or spindle rpms) and reducing chip load, surface speed is the one to go after for tool life unless you’re breaking relatively new cutters, in which case you need to reduce chip load.
+
+    ## 6. Dial Back the Tortoise-Hare Slider :
+    #### The Tortoise-Hare slider can be used to emphasize either Material Removal Rate (“Hare” end) or Surface Finish and Tool Life (“Tortoise” end).  Try dialing back more towards the Tortoise end when you’re particularly concerned about Tool Life.  What that will do is reduce both the Surface Speed and the chip loads, although it reduces chip load the most.
+
+    ## 7.Use a Gentler Cut Entry in Your CAM Program:
+    #### A lot of cutter wear starts on entry to the cut.  You may even chip the edge there, especially in tough work-hardening materials.  The solution to this problem is to adopt gentler entries.  Avoid plunging the cutter.  Instead, use one of these strategies:
+    +##### Ramp in, with a relatively gentle ramp.
+    +##### Helix or spiral in.
+    +##### Use a decent-sized indexable drill to create a hole for entry.
+    +##### For profile cuts and surfacing, arc into the cut.
+
+    ## 8.Be Gentle Exiting the Cut Too
+    #### The other reason to check out that toolpath article is that how you exit the cut matters too for tool life.
+
+    ## 9.Rough With Tougher Tools
+    #### Are you roughing with the same endmill you will use for finishing?  Same size and geometry anyway?
+    #### There are better approaches.  Use a bigger tougher tool for the roughing.  Indexable endmills and corncob roughers can take a lot more abuse than solid endmills.
+
+    ## 10. Spread Wear Over the Cutting Edge
+    #### Are you keeping your cut depths super shallow thinking that’ll mean you’re taking it easy on the cutter?  Well, you are taking it easy, but unfortunately you’re also concentrating all the wear on the tip of the flutes.  They can only last so long that way.  What you need to do is spread that wear over as much of the flute as you can by increasing cut depths.  You’ll have to back off cut width as a tradeoff and you’ll have to watch out for excessive deflection, but once you have those two under control, you’ll get a lot more life out of your cutters.  This has another benefit in that it gives the flutes more “air cutting” time per revolution, which makes it easier for them to cool down as well as to get rid of chips. 
+
+    ## 11.Minimize Runout
+    #### Runout is a nasty business for cutters.  It’ll break tiny micromachining cutters in a heartbeat.  Larger cutters it just wears out prematurely.  Many tooling manufacturers estimate every tenth (0.0001″) of spindle runout reduces tool life by 10%.  That’s significant!''')
+
+
