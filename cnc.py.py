@@ -29,6 +29,7 @@ if result == 'Home':
         + ##### Tool Wear Detection.
         + ##### Tool Wear Prediction.
         + ##### Tool Performanace
+        + ##### Tool Analysis.
         + ##### Outlier Detection.
         + ##### Tool Detection.
         + ##### Data Analysis.
@@ -1424,4 +1425,170 @@ if result == 'Tips':
     ## 11.Minimize Runout
     #### Runout is a nasty business for cutters.  It’ll break tiny micromachining cutters in a heartbeat.  Larger cutters it just wears out prematurely.  Many tooling manufacturers estimate every tenth (0.0001″) of spindle runout reduces tool life by 10%.  That’s significant!''')
 
+if result == 'Tool Analysis':
+    st.subheader('Tool Analysis')
+    import numpy as np
+    import pandas as pd
+    import seaborn as sns
+    import holoviews as hv
+    from holoviews import opts
+    hv.extension('bokeh')
+    from matplotlib import pyplot as plt
+    from sklearn.model_selection import train_test_split
+    from sklearn.preprocessing import StandardScaler, LabelEncoder
+    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
+    import os
+    from scipy import signal
+    import lightgbm as lgb
+    import shap
 
+
+
+    experiment_result = pd.read_csv(uploaded_file)
+    experiment_result.head(3)
+    for multiple_file in multiple_file:
+        bytes_data = multiple_file.read()
+        print("filename:", multiple_file.name)
+        print(bytes_data)
+    frames=list()
+    experiment_tmp = pd.read_csv(multiple_file.name)
+    print(f'experiment_XX.csv : {experiment_tmp.shape}')
+    print(experiment_tmp.columns)
+    experiment_tmp.head(3)
+
+    experiment_result['passed_visual_inspection'] = experiment_result['passed_visual_inspection'].fillna('no')
+    frames = []
+    for i in range(1,19):
+        #load files
+        exp_num = '0' + str(i) if i < 10 else str(i)
+        for multiple_file in multiple_file:
+            bytes_data = multiple_file.read()
+            print("filename:", multiple_file.name)
+            print(bytes_data)
+        frames=list()
+        frame = pd.read_csv(multiple_file.name)
+
+    frames = []
+    for i in range(1,19):
+        #load files
+        exp_num = '0' + str(i) if i < 10 else str(i)
+        for multiple_file in multiple_file:
+            bytes_data = multiple_file.read()
+            print("filename:", multiple_file.name)
+            print(bytes_data)
+        frames=list()
+        frame = pd.read_csv(multiple_file.name)
+
+        #load each experiment result row
+        exp_result_row = experiment_result[experiment_result['No'] == i]
+        frame['exp_num'] = i
+
+        #add experiment settings to features
+        frame['material'] = exp_result_row.iloc[0]['material']
+        frame['feedrate'] = exp_result_row.iloc[0]['feedrate']
+        frame['clamp_pressure'] = exp_result_row.iloc[0]['clamp_pressure']
+        
+        #add experiment result to features
+        frame['tool_condition'] = exp_result_row.iloc[0]['tool_condition']
+        frame['machining_finalized'] = exp_result_row.iloc[0]['machining_finalized']
+        frame['passed_visual_inspection'] = exp_result_row.iloc[0]['passed_visual_inspection']
+
+        frames.append(frame)
+
+    df = pd.concat(frames, ignore_index = True)
+    df.head(3)
+
+
+    df['Machining_Process'].value_counts().sort_index()
+
+   
+    df.replace({'Machining_Process': {'Starting':'Prep','end':'End'}}, inplace=True)
+
+
+    feedrate = hv.Distribution(df['feedrate']).opts(title="Distribution of feedrate", color="green", xlabel="Feedrate", ylabel="Density")
+    clamp = hv.Distribution(df['clamp_pressure']).opts(title="Distribution of clamp pressure", color="green", xlabel="Pressure", ylabel="Density")
+    material = hv.Bars(df['material'].value_counts()).opts(title="Material Count", color="green", xlabel="Material", ylabel="Count")
+    (feedrate + clamp + material).opts(opts.Bars(width=300, height=300,tools=['hover'],show_grid=True)).cols(2)
+
+    tool_df = np.round(df['tool_condition'].value_counts(normalize=True) * 100)
+    finalized_df = np.round(df['machining_finalized'].value_counts(normalize=True) * 100)
+    vis_passed_df = np.round(df['passed_visual_inspection'].value_counts(normalize=True) * 100)
+    tool_wear = hv.Bars(tool_df).opts(title="Tool Wear Count", color="green", xlabel="Worn/Unworn", ylabel="Percentage", yformatter='%d%%')
+    finalized = hv.Bars(finalized_df).opts(title="Finalized Count", color="green", xlabel="Yes/No", ylabel="Percentage", yformatter='%d%%')
+    vis_inspection = hv.Bars(vis_passed_df).opts(title="Visual Inspection Passed Count", color="green", xlabel="Yes/No", ylabel="Percentage", yformatter='%d%%')
+    (tool_wear + finalized + vis_inspection).opts(opts.Bars(width=300, height=300,tools=['hover'],show_grid=True)).cols(2)
+
+
+    finalized_df_worn = np.round(df[df['tool_condition']=='worn']['machining_finalized'].value_counts(normalize=True) * 100)
+    finalized_df_unworn = np.round(df[df['tool_condition']=='unworn']['machining_finalized'].value_counts(normalize=True) * 100)
+    vis_passed_df_worn = np.round(df[df['tool_condition']=='worn']['passed_visual_inspection'].value_counts(normalize=True) * 100)
+    vis_passed_df_unworn = np.round(df[df['tool_condition']=='unworn']['passed_visual_inspection'].value_counts(normalize=True) * 100)
+    
+
+    worn_fin_vis = pd.concat([finalized_df_worn, vis_passed_df_worn], axis=1,sort=True).rename(columns={'machining_finalized':'[WORN] Finalized', 'passed_visual_inspection':'[WORN] Visual Inspection Passed'})
+    worn_fin_vis = pd.melt(worn_fin_vis.reset_index(), ['index']).rename(columns={'index':'Yes/No', 'variable':'Outputs'})
+    hv.Bars(worn_fin_vis, ['Outputs','Yes/No'], 'value').opts(opts.Bars(title="Machining Finalized and Passed Visual Inspection by Worn Tool Count", width=700, height=400,tools=['hover'],\
+                                                                    show_grid=True, ylabel="Percentage", yformatter='%d%%'))
+
+
+    hv.Bars(df['Machining_Process'].value_counts()).opts(title="Machining Process Count", color="red", xlabel="Machining Processes", ylabel="Count")\
+                                        .opts(opts.Bars(width=500, height=300,tools=['hover'],xrotation=45,show_grid=True))
+
+
+    def plot_ts(col, color='red', yformat='%d%%'):
+        v_list = []
+        for i in range(1,19):
+            v = hv.Curve(df[df['exp_num']==i].reset_index()[col]).opts(title=f"{col} in  experiment {i}", xlabel="Time", ylabel=f"{col}", yformatter=yformat)\
+                                                            .opts(width=300, height=150,tools=['hover'],show_grid=True,fontsize=8, color=color)
+            v_list.append(v)
+        return (v_list[0] + v_list[1] + v_list[2] + v_list[3] + v_list[4] + v_list[5] + v_list[6] + v_list[7] + v_list[8] + v_list[9] + v_list[10] + v_list[11] + v_list[12]\
+                + v_list[13] + v_list[14] + v_list[15] + v_list[16] + v_list[17]).opts(shared_axes=False).cols(6)
+
+    plt.figure(figsize=(20,18))
+    g = sns.pairplot(df, hue='tool_condition', vars=["feedrate","clamp_pressure"])
+    g.fig.suptitle("Tool Condition - feedrate/clamp pressure", y=1.1, fontsize=20)
+    g.fig.set_figheight(6)
+    g.fig.set_figwidth(9)
+    st.pyplot(plt)
+
+    plt.figure(figsize=(20,18))
+    g = sns.pairplot(df, hue='machining_finalized', vars=["feedrate","clamp_pressure"])
+    g.fig.suptitle("Machining Finalized - feedrate/clamp pressure", y=1.1, fontsize=20)
+    g.fig.set_figheight(6)
+    g.fig.set_figwidth(9)
+    st.pyplot(plt)
+
+
+    plt.figure(figsize=(20,18))
+    g = sns.pairplot(df, hue='tool_condition', vars=['X1_ActualVelocity','Y1_ActualVelocity','Z1_ActualVelocity','S1_ActualVelocity'])
+    g.fig.suptitle("Tool Condition - velocity", y=1.1, fontsize=20)
+    g.fig.set_figheight(6)
+    g.fig.set_figwidth(9)
+    g.fig.get_children()[-1].set_bbox_to_anchor((1.1, 0.5, 0, 0))
+    st.pyplot(plt)
+
+
+    plt.figure(figsize=(20,18))
+    g = sns.pairplot(df, hue='tool_condition', vars=['X1_DCBusVoltage','Y1_DCBusVoltage','Z1_DCBusVoltage','S1_DCBusVoltage'])
+    g.fig.suptitle("Tool Condition - Voltage", y=1.1, fontsize=20)
+    g.fig.set_figheight(6)
+    g.fig.set_figwidth(9)
+    g.fig.get_children()[-1].set_bbox_to_anchor((1.1, 0.5, 0, 0))
+    st.pyplot(plt)
+
+
+    plt.figure(figsize=(20,18))
+    g = sns.pairplot(df, hue='machining_finalized', vars=['X1_CurrentFeedback','Y1_CurrentFeedback','Z1_CurrentFeedback','S1_CurrentFeedback'])
+    g.fig.suptitle("Machining Finalized - Current", y=1.1, fontsize=20)
+    g.fig.set_figheight(6)
+    g.fig.set_figwidth(9)
+    g.fig.get_children()[-1].set_bbox_to_anchor((1.1, 0.5, 0, 0))
+    st.pyplot(plt)
+
+    plt.figure(figsize=(20,18))
+    g = sns.pairplot(df, hue='machining_finalized', vars=['X1_ActualVelocity','Y1_ActualVelocity','Z1_ActualVelocity','S1_ActualVelocity'])
+    g.fig.suptitle("Machining Finalized - velocity", y=1.1, fontsize=20)
+    g.fig.set_figheight(6)
+    g.fig.set_figwidth(9)
+    g.fig.get_children()[-1].set_bbox_to_anchor((1.1, 0.5, 0, 0))
+    st.pyplot(plt)
